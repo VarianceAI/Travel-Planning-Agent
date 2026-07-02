@@ -4,7 +4,7 @@ from typing import Optional
 import asyncio
 
 from models import ParsedTrip, FlightOffer, HotelOffer, Itinerary
-from adapters.amadeus_adapter import fetch_flights, fetch_hotels
+from adapters.serpapi_adapter import fetch_flights, fetch_hotels
 
 
 async def generate_itineraries(parsed: ParsedTrip, top_k: int = 10) -> tuple[list[Itinerary], int]:
@@ -14,8 +14,10 @@ async def generate_itineraries(parsed: ParsedTrip, top_k: int = 10) -> tuple[lis
     Returns (ranked itineraries, combinations_evaluated).
     """
     # Build all (departure_date, trip_length) pairs
+    # Require at least 2 days from today for Google Flights to have data
+    earliest = date.today() + timedelta(days=2)
     date_trip_pairs: list[tuple[date, int]] = []
-    current = parsed.date_range_start
+    current = max(parsed.date_range_start, earliest)
     while current <= parsed.date_range_end:
         for length in range(parsed.trip_length_min, parsed.trip_length_max + 1):
             return_date = current + timedelta(days=length)

@@ -132,25 +132,41 @@ def _parse_min_star(text: str) -> float | None:
 def _rule_based_parse(raw: str) -> ParsedTrip:
     t = raw.lower()
 
-    # Destination: look for "in <city>", "to <city>", "visiting <city>"
-    dest = "NYC"
-    for pattern in [r"(?:in|to|visit(?:ing)?)\s+([a-z\s]+?)(?:,|\.|for|\bfrom\b|during|$)"]:
-        m = re.search(pattern, t)
-        if m:
-            candidate = _resolve_city(m.group(1).strip())
-            if candidate != "NYC":  # don't use default
-                dest = candidate
-                break
-
-    # Origin: look for "from <city>"
+    # Origin: "from <city>" — parse first so destination scan can skip it
     origin = "NYC"
-    m = re.search(r"from\s+([a-z\s]+?)(?:,|\.|during|in\b|$)", t)
+    origin_span = None
+    m = re.search(r"from\s+([a-z][a-z\s]+?)(?:\s*,|\s*\.|\s+during|\s+in\b|\s+for\b|$)", t)
     if m:
         origin = _resolve_city(m.group(1).strip())
+        origin_span = m.span()
 
-    # Swap if origin == dest (parsing error)
-    if origin == dest:
-        origin = "NYC"
+    # Destination: try multiple patterns in priority order
+    dest = None
+    dest_patterns = [
+        r"(?:staying|trip|vacation|travel|going|fly)\s+(?:in|to)\s+([a-z][a-z\s]+?)(?:\s*,|\s*\.|\s+for\b|\s+from\b|\s+during|$)",
+        r"(?:^|price\s+for\s+|best\s+(?:price\s+)?for\s+)([a-z][a-z\s]+?)\s+(?:\d+\s*day|for\s+\d)",
+        r"(?:in|to|visit(?:ing)?)\s+([a-z][a-z\s]+?)(?:\s*,|\s*\.|\s+for\b|\s+from\b|\s+during|$)",
+    ]
+    for pattern in dest_patterns:
+        for m in re.finditer(pattern, t):
+            # Skip match if it overlaps the "from <origin>" span
+            if origin_span and m.start(1) >= origin_span[0] and m.start(1) <= origin_span[1]:
+                continue
+            candidate = _resolve_city(m.group(1).strip())
+            if candidate and candidate != origin:
+                dest = candidate
+                break
+        if dest:
+            break
+
+    # Last resort: scan all known city names, take the one that isn't the origin
+    if not dest:
+        for name, code in CITY_TO_IATA.items():
+            if name in t and code != origin:
+                dest = code
+                break
+
+    dest = dest or "MIA"  # final fallback
 
     date_start, date_end = _parse_dates(raw)
     length_min, length_max = _parse_trip_length(raw)
