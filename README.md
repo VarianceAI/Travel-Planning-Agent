@@ -1,6 +1,6 @@
 # Travel Planning AI Agent
 
-An AI-powered travel planner that takes a free-form natural language query and returns ranked, optimized flight + hotel itineraries by evaluating thousands of date/price combinations.
+An AI-powered travel planner that takes a free-form natural language query and returns ranked, optimized flight + hotel itineraries by evaluating thousands of date/price combinations. Help travelers save money and gain greater flexibility by eliminating unnecessary expenses associated with traditional trip planning
 
 ---
 
