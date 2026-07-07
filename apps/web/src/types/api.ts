@@ -1,13 +1,20 @@
 export interface FlightConstraints {
   direct_only: boolean;
   max_stops: number | null;
+  cabin_class: "economy" | "premium_economy" | "business" | "first";
   preferred_airlines: string[];
+  excluded_airlines: string[];
+  max_duration_hours: number | null;
 }
 
 export interface HotelConstraints {
   min_star: number | null;
   max_star: number | null;
+  level: "budget" | "mid" | "upscale" | "luxury" | null;
   preferred_neighborhoods: string[];
+  required_amenities: string[];
+  preferred_brands: string[];
+  max_nightly_rate: number | null;
 }
 
 export interface ParsedTrip {
@@ -17,9 +24,13 @@ export interface ParsedTrip {
   date_range_end: string;
   trip_length_min: number;
   trip_length_max: number;
+  is_round_trip: boolean;
+  travelers: number;
   budget: number | null;
+  budget_per_person: number | null;
   flight_constraints: FlightConstraints;
   hotel_constraints: HotelConstraints;
+  special_requirements: string[];
 }
 
 export interface FlightOffer {
@@ -35,6 +46,7 @@ export interface FlightOffer {
   currency: string;
   stops: number;
   airline: string | null;
+  cabin_class: string;
   is_round_trip: boolean;
 }
 
