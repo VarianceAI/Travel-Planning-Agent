@@ -1,0 +1,41 @@
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    id: build-web
+    args:
+      - build
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/travel-agent/web:$COMMIT_SHA
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/travel-agent/web:latest
+      - --build-arg
+      - NEXT_PUBLIC_API_URL=https://travel-api-vn7lzpdvuq-uc.a.run.app
+      - ./apps/web
+
+  - name: "gcr.io/cloud-builders/docker"
+    id: push-web
+    waitFor: ["build-web"]
+    args: [push, --all-tags, us-central1-docker.pkg.dev/$PROJECT_ID/travel-agent/web]
+
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: deploy-web
+    waitFor: ["push-web"]
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - travel-web
+      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/travel-agent/web:$COMMIT_SHA
+      - --region=us-central1
+      - --platform=managed
+      - --memory=512Mi
+      - --cpu=1
+      - --min-instances=0
+      - --max-instances=10
+      - --port=3000
+      - --allow-unauthenticated
+
+images:
+  - us-central1-docker.pkg.dev/$PROJECT_ID/travel-agent/web:$COMMIT_SHA
+
+options:
+  logging: CLOUD_LOGGING_ONLY

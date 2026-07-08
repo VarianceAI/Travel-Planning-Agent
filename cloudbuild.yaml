@@ -1,6 +1,7 @@
 steps:
-  # Build API image
+  # ── Build images ────────────────────────────────────────────────────────────
   - name: "gcr.io/cloud-builders/docker"
+    id: build-api
     args:
       - build
       - -t
@@ -9,8 +10,8 @@ steps:
       - us-central1-docker.pkg.dev/$PROJECT_ID/travel-agent/api:latest
       - ./apps/api
 
-  # Build Web image
   - name: "gcr.io/cloud-builders/docker"
+    id: build-web
     args:
       - build
       - -t
@@ -18,25 +19,24 @@ steps:
       - -t
       - us-central1-docker.pkg.dev/$PROJECT_ID/travel-agent/web:latest
       - --build-arg
-      - NEXT_PUBLIC_API_URL=https://api-travel-YOUR_HASH-uc.a.run.app
+      - NEXT_PUBLIC_API_URL=https://travel-api-${_API_SUFFIX}.run.app
       - ./apps/web
 
-  # Push API image
+  # ── Push images ─────────────────────────────────────────────────────────────
   - name: "gcr.io/cloud-builders/docker"
-    args:
-      - push
-      - --all-tags
-      - us-central1-docker.pkg.dev/$PROJECT_ID/travel-agent/api
+    id: push-api
+    waitFor: ["build-api"]
+    args: [push, --all-tags, us-central1-docker.pkg.dev/$PROJECT_ID/travel-agent/api]
 
-  # Push Web image
   - name: "gcr.io/cloud-builders/docker"
-    args:
-      - push
-      - --all-tags
-      - us-central1-docker.pkg.dev/$PROJECT_ID/travel-agent/web
+    id: push-web
+    waitFor: ["build-web"]
+    args: [push, --all-tags, us-central1-docker.pkg.dev/$PROJECT_ID/travel-agent/web]
 
-  # Deploy API to Cloud Run
+  # ── Deploy API ───────────────────────────────────────────────────────────────
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: deploy-api
+    waitFor: ["push-api"]
     entrypoint: gcloud
     args:
       - run
@@ -45,15 +45,32 @@ steps:
       - --image=us-central1-docker.pkg.dev/$PROJECT_ID/travel-agent/api:$COMMIT_SHA
       - --region=us-central1
       - --platform=managed
-      - --allow-unauthenticated
       - --memory=512Mi
       - --cpu=1
       - --min-instances=0
       - --max-instances=10
+      - --port=8080
       - --set-secrets=SERPAPI_KEY=SERPAPI_KEY:latest,ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest
+      - --no-allow-unauthenticated
 
-  # Deploy Web to Cloud Run
+  # ── Make API public ──────────────────────────────────────────────────────────
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: public-api
+    waitFor: ["deploy-api"]
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - add-iam-policy-binding
+      - travel-api
+      - --region=us-central1
+      - --member=allUsers
+      - --role=roles/run.invoker
+
+  # ── Deploy Web ───────────────────────────────────────────────────────────────
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: deploy-web
+    waitFor: ["push-web"]
     entrypoint: gcloud
     args:
       - run
@@ -62,15 +79,33 @@ steps:
       - --image=us-central1-docker.pkg.dev/$PROJECT_ID/travel-agent/web:$COMMIT_SHA
       - --region=us-central1
       - --platform=managed
-      - --allow-unauthenticated
       - --memory=512Mi
       - --cpu=1
       - --min-instances=0
       - --max-instances=10
+      - --port=3000
+      - --no-allow-unauthenticated
+
+  # ── Make Web public ──────────────────────────────────────────────────────────
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: public-web
+    waitFor: ["deploy-web"]
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - add-iam-policy-binding
+      - travel-web
+      - --region=us-central1
+      - --member=allUsers
+      - --role=roles/run.invoker
 
 images:
   - us-central1-docker.pkg.dev/$PROJECT_ID/travel-agent/api:$COMMIT_SHA
   - us-central1-docker.pkg.dev/$PROJECT_ID/travel-agent/web:$COMMIT_SHA
+
+substitutions:
+  _API_SUFFIX: ""   # set this after first deploy
 
 options:
   logging: CLOUD_LOGGING_ONLY
